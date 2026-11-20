@@ -1,161 +1,98 @@
-# E-Commerce Order Analysis Dashboard
 
-## 1. Project Overview
+USE ecommerce_analysis;
 
-This project explores e-commerce order activity using MySQL and Microsoft Excel.
+-- ==========================================
+-- E-COMMERCE SQL ANALYSIS
+-- ==========================================
 
-The objective is to examine monthly order trends, understand order-status distribution, and identify data-quality issues that may affect the reliability of business reporting.
+-- 1. DATASET OVERVIEW
 
-The project includes SQL queries, data-quality validation checks, and an Excel dashboard.
+SELECT
+    COUNT(*) AS total_orders,
+    COUNT(DISTINCT order_id) AS unique_orders,
+    MIN(order_purchase_timestamp) AS first_order_date,
+    MAX(order_purchase_timestamp) AS last_order_date
+FROM orders;
 
-## 2. Tools Used
 
-- **MySQL:** Data exploration, SQL queries, aggregations and validation checks.
-- **MySQL Workbench:** SQL query execution and database analysis.
-- **Microsoft Excel:** Dashboard development and visualization.
-- **GitHub:** Project documentation and portfolio presentation.
+-- 2. MONTHLY ORDER TREND
 
-## 3. Project Objectives
+SELECT
+    DATE_FORMAT(order_purchase_timestamp, '%Y-%m') AS order_month,
+    COUNT(DISTINCT order_id) AS total_orders
+FROM orders
+GROUP BY DATE_FORMAT(order_purchase_timestamp, '%Y-%m')
+ORDER BY order_month;
 
-- Analyze monthly order trends.
-- Examine order-status distribution.
-- Count unique customers and orders.
-- Identify inconsistencies in product ID relationships.
-- Validate payment-type records.
-- Present reliable findings through an Excel dashboard.
 
-## 4. Dataset Overview
+-- 3. AVERAGE ORDER VALUE
+-- PROVISIONAL: Payment data requires validation.
 
-The analysis uses five database tables:
+SELECT
+    ROUND(AVG(order_total), 2) AS avg_order_value
+FROM (
+    SELECT
+        order_id,
+        SUM(payment_value) AS order_total
+    FROM payments
+    GROUP BY order_id
+) AS order_payments;
 
-- `customers`
-- `orders`
-- `order_items`
-- `products`
-- `payments`
 
-### Verified Dataset Metrics
+-- ==========================================
+-- DATA QUALITY VALIDATION
+-- ==========================================
 
-| Metric | Result |
-|---|---:|
-| Unique Customers | 21,640 |
-| Total Orders | 5,158 |
-| Order Records | 5,158 |
-| Order Items | 8,318 |
-| Payment Records | 36,674 |
-| Order Date Range | September 2016 – September 2018 |
+-- 4. PRODUCT ID MATCHING AUDIT
 
-These figures describe the available database tables. They should not be interpreted as evidence that all tables contain complete or mutually consistent records.
+SELECT
+    COUNT(*) AS total_order_items,
+    COUNT(p.product_id) AS matched_records,
+    COUNT(*) - COUNT(p.product_id) AS unmatched_records
+FROM order_items oi
+LEFT JOIN products p
+    ON oi.product_id = p.product_id;
 
-## 5. SQL Analysis
 
-### Monthly Order Trend
+-- 5. PAYMENT TYPE VALIDATION
 
-Monthly order counts were calculated using the order purchase timestamp and distinct order IDs.
+SELECT
+    COUNT(*) AS total_payment_records,
 
-The analysis found that November 2017 recorded the highest monthly order volume, with 418 orders.
+    SUM(CASE
+        WHEN payment_type IN (
+            'credit_card',
+            'boleto',
+            'voucher',
+            'debit_card',
+            'not_defined'
+        ) THEN 1 ELSE 0
+    END) AS valid_payment_types,
 
-### Order Status Distribution
+    SUM(CASE
+        WHEN payment_type IS NULL
+          OR TRIM(payment_type) = ''
+        THEN 1 ELSE 0
+    END) AS blank_payment_types,
 
-Order records were grouped by status to understand the distribution of delivered, shipped, invoiced, processing, unavailable and canceled orders.
+    SUM(CASE
+        WHEN payment_type IS NOT NULL
+         AND TRIM(payment_type) <> ''
+         AND payment_type NOT IN (
+            'credit_card',
+            'boleto',
+            'voucher',
+            'debit_card',
+            'not_defined'
+         ) THEN 1 ELSE 0
+    END) AS unexpected_payment_types
 
-Delivered orders represented the largest category.
+FROM payments;
 
-### Average Order Value
+-- 6. TOTAL UNIQUE CUSTOMERS
+-- Verified result: 21,640
 
-An exploratory SQL query calculates average order value by first aggregating payment amounts at the order level.
+SELECT
+    COUNT(DISTINCT customer_id) AS total_customers
+FROM customers;	
 
-However, payment-data inconsistencies were identified. Therefore, the calculated AOV is treated as provisional and excluded from the final dashboard.
-
-## 6. Data Quality Validation
-
-Data-quality checks were performed to identify inconsistencies affecting the reliability of the analysis.
-
-### Product ID Matching
-
-| Validation Metric | Result |
-|---|---:|
-| Total Order-Item Records | 8,318 |
-| Matched Product Records | 39 |
-| Unmatched Product Records | 8,279 |
-
-The high number of unmatched product IDs indicates that product-category analysis cannot be considered reliable using the current database tables.
-
-For this reason, product-category sales and revenue charts were excluded from the final dashboard.
-
-### Payment Type Validation
-
-| Validation Metric | Result |
-|---|---:|
-| Total Payment Records | 36,674 |
-| Valid Payment Types | 32,246 |
-| Blank Payment Types | 20 |
-| Unexpected Payment Types | 4,408 |
-
-Unexpected payment-type values were identified, including order-status labels and numeric values.
-
-Payment-method distribution was excluded from the final dashboard because of these inconsistencies.
-
-## 7. Excel Dashboard
-
-The final Excel dashboard is titled **E-Commerce Order Analysis Dashboard**.
-
-It includes:
-
-**Key Performance Indicators**
-- Total Customers: 21,640
-- Total Orders: 5,158
-
-**Visualizations**
-- Monthly Orders Trend
-- Order Status Distribution
-
-**Key Insights**
-1. The dataset contains 5,158 orders recorded between September 2016 and September 2018.
-2. Monthly order volume peaked in November 2017, with 418 orders.
-3. Delivered is the largest order-status category.
-
-The dashboard focuses on verified order activity rather than presenting unreliable financial or product-level results.
-
-## 8. Business Insights
-
-- Monthly order volumes varied across the reporting period, with November 2017 showing the highest recorded activity.
-- Delivered orders accounted for the largest share of order statuses.
-- Product and payment data inconsistencies limit the reliability of certain sales and financial analyses.
-- Data validation is necessary before using inconsistent datasets for business reporting.
-
-## 9. Recommendations
-
-- Investigate unmatched product IDs and verify product-master completeness.
-- Review unexpected payment-type values against the original source records.
-- Establish validation rules for product identifiers and payment categories.
-- Reconcile order, product and payment tables before producing financial reports.
-- Use verified metrics for dashboards and clearly disclose unresolved data-quality limitations.
-
-## 10. Project Limitations
-
-- Product ID mismatches prevent reliable product-category reporting.
-- Payment-type anomalies reduce confidence in payment-related analysis.
-- Revenue and average order value were excluded from the final dashboard because their reliability was not established.
-- The analysis reflects the available imported dataset and does not establish the underlying cause of its inconsistencies.
-
-## 11. AI Assistance Disclosure
-
-This is a guided learning and portfolio project developed with assistance from ChatGPT.
-
-AI assistance was used for SQL query guidance, debugging, validation approaches, interpretation and project documentation.
-
-The project demonstrates practical exposure to SQL-based analysis, Excel reporting and data-quality investigation. It does not represent independent production-level database work.
-
-## 12. Repository Files
-
-- `Ecommerce_SQL_Analysis_Script.sql` — SQL queries and validation checks.
-- `Ecommerce_SQL_Analysis_Dashboard.xlsx` — Excel dashboard and supporting worksheets.
-- `dashboard_preview.jpg` — Dashboard screenshot.
-- `README.md` — Project documentation.
-
-## 13. Conclusion
-
-This project demonstrates the use of MySQL and Excel to examine e-commerce order activity and investigate data-quality issues.
-
-A key learning outcome was recognizing that reliable reporting requires validating source data before presenting business conclusions.
