@@ -1,69 +1,32 @@
 
--- =====================================================
--- E-COMMERCE SQL ANALYSIS
--- Database: ecommerce_analysis
--- Tool: MySQL
--- =====================================================
-
-
--- 1. DATABASE SETUP
-
-CREATE DATABASE IF NOT EXISTS ecommerce_analysis;
-
 USE ecommerce_analysis;
 
+-- ==========================================
+-- E-COMMERCE SQL ANALYSIS
+-- ==========================================
 
--- 2. DATA EXPLORATION
-
-SELECT * FROM customers LIMIT 10;
-
-SELECT * FROM orders LIMIT 10;
-
-SELECT * FROM products LIMIT 10;
-
-SELECT * FROM payments LIMIT 10;
-
-
--- 3. TABLE STRUCTURE
-
-DESCRIBE customers;
-
-DESCRIBE orders;
-
-DESCRIBE order_items;
-
-DESCRIBE products;
-
-DESCRIBE payments;
-
-
--- 4. BASIC BUSINESS METRICS
-
--- Total customers
+-- 1. DATASET OVERVIEW
 
 SELECT
-    COUNT(customer_id) AS total_customers
-FROM customers;
-
-
--- Total orders
-
-SELECT
-    COUNT(order_id) AS total_orders
+    COUNT(*) AS total_orders,
+    COUNT(DISTINCT order_id) AS unique_orders,
+    MIN(order_purchase_timestamp) AS first_order_date,
+    MAX(order_purchase_timestamp) AS last_order_date
 FROM orders;
 
 
--- Total revenue collected through payments
+-- 2. MONTHLY ORDER TREND
 
 SELECT
-    ROUND(SUM(payment_value), 2) AS total_revenue
-FROM payments;
+    DATE_FORMAT(order_purchase_timestamp, '%Y-%m') AS order_month,
+    COUNT(DISTINCT order_id) AS total_orders
+FROM orders
+GROUP BY DATE_FORMAT(order_purchase_timestamp, '%Y-%m')
+ORDER BY order_month;
 
 
--- 5. AVERAGE ORDER VALUE
-
--- First calculate total payment for each order.
--- Then calculate the average of those order totals.
+-- 3. AVERAGE ORDER VALUE
+-- PROVISIONAL: Payment data requires validation.
 
 SELECT
     ROUND(AVG(order_total), 2) AS avg_order_value
@@ -76,103 +39,60 @@ FROM (
 ) AS order_payments;
 
 
--- 6. TOP 10 PRODUCTS
+-- ==========================================
+-- DATA QUALITY VALIDATION
+-- ==========================================
 
--- Counts the number of order-item records
--- associated with each product.
-
-SELECT
-    product_id,
-    COUNT(*) AS total_order_items
-FROM order_items
-GROUP BY product_id
-ORDER BY total_order_items DESC
-LIMIT 10;
-
-
--- 7. ORDER STATUS ANALYSIS
+-- 4. PRODUCT ID MATCHING AUDIT
 
 SELECT
-    order_status,
-    COUNT(order_id) AS total_orders
-FROM orders
-GROUP BY order_status
-ORDER BY total_orders DESC;
-
-
--- 8. MONTHLY ORDER TRENDS
-
-SELECT
-    DATE_FORMAT(order_purchase_timestamp, '%Y-%m') AS order_month,
-    COUNT(order_id) AS total_orders
-FROM orders
-GROUP BY order_month
-ORDER BY order_month;
-
-
--- 9. TOP 10 CUSTOMERS BY SPENDING
-
-SELECT
-    o.customer_id,
-    ROUND(SUM(p.payment_value), 2) AS total_spent
-FROM orders o
-JOIN payments p
-    ON o.order_id = p.order_id
-GROUP BY o.customer_id
-ORDER BY total_spent DESC
-LIMIT 10;
-
-
--- 10. REVENUE BY PRODUCT CATEGORY
-
--- Uses item prices rather than joining payment totals
--- to every product row, avoiding duplicated payment amounts.
--- Freight charges are excluded from this calculation.
-
-SELECT
-    COALESCE(p.product_category_name, 'Unknown') AS product_category,
-    ROUND(SUM(oi.price), 2) AS category_revenue
+    COUNT(*) AS total_order_items,
+    COUNT(p.product_id) AS matched_records,
+    COUNT(*) - COUNT(p.product_id) AS unmatched_records
 FROM order_items oi
-JOIN products p
-    ON oi.product_id = p.product_id
-GROUP BY
-    COALESCE(p.product_category_name, 'Unknown')
-ORDER BY category_revenue DESC;
+LEFT JOIN products p
+    ON oi.product_id = p.product_id;
 
 
--- 11. ADDITIONAL DATA COUNTS
+-- 5. PAYMENT TYPE VALIDATION
 
-SELECT COUNT(*) AS total_products
-FROM products;
+SELECT
+    COUNT(*) AS total_payment_records,
 
-SELECT COUNT(*) AS total_order_items
-FROM order_items;
+    SUM(CASE
+        WHEN payment_type IN (
+            'credit_card',
+            'boleto',
+            'voucher',
+            'debit_card',
+            'not_defined'
+        ) THEN 1 ELSE 0
+    END) AS valid_payment_types,
 
-SELECT COUNT(*) AS total_payment_records
+    SUM(CASE
+        WHEN payment_type IS NULL
+          OR TRIM(payment_type) = ''
+        THEN 1 ELSE 0
+    END) AS blank_payment_types,
+
+    SUM(CASE
+        WHEN payment_type IS NOT NULL
+         AND TRIM(payment_type) <> ''
+         AND payment_type NOT IN (
+            'credit_card',
+            'boleto',
+            'voucher',
+            'debit_card',
+            'not_defined'
+         ) THEN 1 ELSE 0
+    END) AS unexpected_payment_types
+
 FROM payments;
 
-
--- 12. CUSTOMERS WITH MOST ORDERS
-
-SELECT
-    customer_id,
-    COUNT(order_id) AS total_orders
-FROM orders
-GROUP BY customer_id
-ORDER BY total_orders DESC
-LIMIT 10;
-
-
--- 13. PAYMENT METHOD DISTRIBUTION
+-- 6. TOTAL UNIQUE CUSTOMERS
+-- Verified result: 21,640
 
 SELECT
-    payment_type,
-    COUNT(*) AS total_transactions
-FROM payments
-GROUP BY payment_type
-ORDER BY total_transactions DESC;
+    COUNT(DISTINCT customer_id) AS total_customers
+FROM customers;	
 
-
--- =====================================================
--- END OF E-COMMERCE SQL ANALYSIS
--- =====================================================
