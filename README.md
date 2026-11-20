@@ -1,57 +1,97 @@
-# E-Commerce SQL Analysis Dashboard
+USE ecommerce_analysis;
 
-## Project Overview
-This project analyzes e-commerce business performance using SQL queries and an Excel dashboard. It focuses on customers, orders, revenue trends, product performance, and payment insights.
+-- ==========================================
+-- E-COMMERCE SQL ANALYSIS
+-- ==========================================
 
----
+-- 1. DATASET OVERVIEW
 
-## Business Problem
-E-commerce companies generate large volumes of transactional data. Without proper analysis, it becomes difficult to track growth, identify trends, and support decision-making.
+SELECT
+    COUNT(*) AS total_orders,
+    COUNT(DISTINCT order_id) AS unique_orders,
+    MIN(order_purchase_timestamp) AS first_order_date,
+    MAX(order_purchase_timestamp) AS last_order_date
+FROM orders;
 
----
 
-## Solution
-Used MySQL to query e-commerce data and generate business insights. Built an Excel dashboard to present KPIs and trends in a clear and simple format.
+-- 2. MONTHLY ORDER TREND
 
----
+SELECT
+    DATE_FORMAT(order_purchase_timestamp, '%Y-%m') AS order_month,
+    COUNT(DISTINCT order_id) AS total_orders
+FROM orders
+GROUP BY DATE_FORMAT(order_purchase_timestamp, '%Y-%m')
+ORDER BY order_month;
 
-## Key Insights
-- Total customers, orders, and revenue analyzed  
-- Monthly sales trends reviewed  
-- Top customers and products identified  
-- Revenue by category studied  
-- Order status and payment method patterns examined  
 
----
+-- 3. AVERAGE ORDER VALUE
+-- PROVISIONAL: Payment data requires validation.
 
-## Dashboard Preview
-![Dashboard](dashboard_preview.jpg)
+SELECT
+    ROUND(AVG(order_total), 2) AS avg_order_value
+FROM (
+    SELECT
+        order_id,
+        SUM(payment_value) AS order_total
+    FROM payments
+    GROUP BY order_id
+) AS order_payments;
 
----
 
-## Files Included
-- `Ecommerce_SQL_Analysis_Dashboard.xlsx` – Excel dashboard file  
-- `Ecommerce_SQL_Analysis_Script.sql` – SQL queries used for analysis  
-- `dashboard_preview.jpg` – Dashboard preview image  
+-- ==========================================
+-- DATA QUALITY VALIDATION
+-- ==========================================
 
----
+-- 4. PRODUCT ID MATCHING AUDIT
 
-## Tools Used
-- MySQL  
-- Excel  
-- SQL  
-- Data Analysis  
+SELECT
+    COUNT(*) AS total_order_items,
+    COUNT(p.product_id) AS matched_records,
+    COUNT(*) - COUNT(p.product_id) AS unmatched_records
+FROM order_items oi
+LEFT JOIN products p
+    ON oi.product_id = p.product_id;
 
----
 
-## Skills Demonstrated
-- SQL Query Writing  
-- KPI Reporting  
-- Data Analysis  
-- Dashboard Development  
-- Business Insights  
+-- 5. PAYMENT TYPE VALIDATION
 
----
+SELECT
+    COUNT(*) AS total_payment_records,
 
-## Purpose
-This project demonstrates practical SQL, reporting, and dashboard skills relevant for Junior Data Analyst, MIS Executive, Reporting Analyst, Data Operations Analyst, and Operations Analyst roles.
+    SUM(CASE
+        WHEN payment_type IN (
+            'credit_card',
+            'boleto',
+            'voucher',
+            'debit_card',
+            'not_defined'
+        ) THEN 1 ELSE 0
+    END) AS valid_payment_types,
+
+    SUM(CASE
+        WHEN payment_type IS NULL
+          OR TRIM(payment_type) = ''
+        THEN 1 ELSE 0
+    END) AS blank_payment_types,
+
+    SUM(CASE
+        WHEN payment_type IS NOT NULL
+         AND TRIM(payment_type) <> ''
+         AND payment_type NOT IN (
+            'credit_card',
+            'boleto',
+            'voucher',
+            'debit_card',
+            'not_defined'
+         ) THEN 1 ELSE 0
+    END) AS unexpected_payment_types
+
+FROM payments;
+
+-- 6. TOTAL UNIQUE CUSTOMERS
+-- Verified result: 21,640
+
+SELECT
+    COUNT(DISTINCT customer_id) AS total_customers
+FROM customers;	
+
