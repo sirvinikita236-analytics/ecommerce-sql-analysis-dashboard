@@ -98,6 +98,7 @@ Payment-method distribution was excluded from the final dashboard because of the
 
 ## 7. Excel Dashboard
 
+![E-Commerce Order Analysis Dashboard](dashboard_preview..png)
 The final Excel dashboard is titled **E-Commerce Order Analysis Dashboard**.
 
 It includes:
